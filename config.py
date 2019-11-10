@@ -1,4 +1,4 @@
-k = 3
+k = 1
 path_data = "data.txt"
-punct = [5,5]
+punct = [[2, 2], [3, 3]] #poprawic
 number_of_features = 2
