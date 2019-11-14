@@ -50,21 +50,26 @@ def knn(k: int, dane: dict, puncts: list) -> None:
 
         distances_A.sort()
         distances_B.sort()
-
+      
+        all_distances = list(set().union(distances_A, distances_B))
+        all_distances.sort()
+        
         vote = {'A': 0, 'B': 0}
-
         for i in range(k):
-            for j in range(k):
-                if distances_A[i] == distances_B[j]:
-                    continue
-                elif distances_A[i] < distances_B[j]:
-                    vote['A'] += 1
-                else:
-                    vote['B'] += 1
+            if all_distances[i] in distances_A and all_distances[i] in distances_B:
+                vote['A'] += 1
+                vote['B'] += 1
+            elif all_distances[i] in distances_A:
+                vote['A'] += 1  
+            else:
+                vote['B'] += 1
 
         if vote['A'] > vote['B']:
             ost_vote['A'] += 1
+        elif vote['A'] < vote['B']:
+            ost_vote['B'] += 1
         else:
+            ost_vote['A'] += 1
             ost_vote['B'] += 1
     print("knn: ", ost_vote)
 
