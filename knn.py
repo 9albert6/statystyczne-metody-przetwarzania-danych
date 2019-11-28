@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 import numpy as np
 import config
-
+import random
 
 def read_data(path: str) -> dict:
     with open(path) as file:
@@ -30,6 +30,47 @@ def calculate_average(features: np.ndarray) -> np.ndarray:
     return np.average(features, axis=0)
 
 
+def randomize_centres(k: int, puncts: list) -> list:
+    k_array = []
+    while len(k_array) != 2:
+        val = random.choice(puncts)
+        if list(val) not in k_array:
+            k_array.append(list(val))
+    return k_array
+
+
+def calculate_new_classes(k: int, puncts: list, centres: list) -> list:
+    test = [[] for i in range(k)]
+
+    for feature in puncts:
+        smallest_distance = calculate_distance(centres[0], feature)
+        flag = 0
+        for i in range(k):
+            if smallest_distance > calculate_distance(centres[i], feature):
+                smallest_distance = calculate_distance(centres[i], feature)
+                flag = i
+        test[flag].append(feature)
+    return test
+
+
+def clusterise(k: int, puncts: list, centres: list) -> list:
+    flag = True
+    error = 0.001
+    while flag:
+        k_class = calculate_new_classes(k, puncts, centres)
+        
+        old_centr = centres.copy()
+
+        for i in range(k):
+            centres[i] = calculate_average(k_class[i])
+
+        flag = False
+        for i in range(k):
+            if calculate_distance(old_centr[i], centres[i]) > error:
+                flag = True
+                break
+    return k_class, centres
+
 def knn(k: int, dane: dict, puncts: list) -> None:
     ost_vote = {'A': 0, 'B': 0}
 
@@ -56,10 +97,7 @@ def knn(k: int, dane: dict, puncts: list) -> None:
         
         vote = {'A': 0, 'B': 0}
         for i in range(k):
-            if all_distances[i] in distances_A and all_distances[i] in distances_B:
-                vote['A'] += 1
-                vote['B'] += 1
-            elif all_distances[i] in distances_A:
+            if all_distances[i] in distances_A:
                 vote['A'] += 1  
             else:
                 vote['B'] += 1
@@ -70,7 +108,6 @@ def knn(k: int, dane: dict, puncts: list) -> None:
             ost_vote['B'] += 1
         else:
             ost_vote['A'] += 1
-            ost_vote['B'] += 1
     print("knn: ", ost_vote)
 
 
@@ -92,7 +129,43 @@ def mn(dane: dict, puncts: list) -> None:
     print("mn: ", ost_vote)
 
 
+def kmn(k: int, dane: dict, puncts: list) -> None:
+    ost_vote = {'A': 0, 'B': 0}
+    
+    k_A = randomize_centres(k, dane['A'])
+    k_B = randomize_centres(k, dane['B'])
+
+    class_A, k_A = clusterise(k, dane['A'], k_A)
+    class_B, k_B = clusterise(k, dane['B'], k_B)
+   
+    for punct in puncts:
+        distances_A = []
+        distances_B = []
+        for i in range(k):
+            distances_A.append(calculate_distance(k_A[i], punct))
+            distances_B.append(calculate_distance(k_B[i], punct))
+
+        all_distances = list(set().union(distances_A, distances_B))
+        all_distances.sort()
+
+        vote = {'A': 0, 'B': 0}
+        for i in range(k):
+            if all_distances[i] in distances_A:
+                vote['A'] += 1  
+            else:
+                vote['B'] += 1
+
+        if vote['A'] > vote['B']:
+            ost_vote['A'] += 1
+        elif vote['A'] < vote['B']:
+            ost_vote['B'] += 1
+        else:
+            ost_vote['A'] += 1
+    print("knm: ", ost_vote)
+
+    
 if __name__ == "__main__":
     input_data = read_data(config.class_data)
-    knn(config.k, input_data, config.punct_data)
-    mn(input_data, config.punct_data)
+    # knn(config.k, input_data, config.punct_data)
+    # mn(input_data, config.punct_data)
+    kmn(config.k, input_data, config.punct_data)
