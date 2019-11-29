@@ -163,9 +163,28 @@ def kmn(k: int, dane: dict, puncts: list) -> None:
             ost_vote['A'] += 1
     print("knm: ", ost_vote)
 
+
+def fischer(dane: dict) -> None:
     
+    feature_A_avg = np.average(dane['A'], axis = 0)
+    feature_B_avg = np.average(dane['B'], axis = 0)
+
+    std_dev_A = np.std(dane['A'], axis = 0)
+    std_dev_B = np.std(dane['B'], axis = 0)
+
+    fischer_feature = []
+
+    for i in range(len(feature_A_avg)):
+        value = (abs(feature_A_avg[i] - feature_B_avg[i]) / (std_dev_A[i] + std_dev_B[i]))
+        fischer_feature.append(value)
+    print(fischer_feature)
+
+    print("The most significant feature is:  ", fischer_feature.index(max(fischer_feature)))
+
+
 if __name__ == "__main__":
     input_data = read_data(config.class_data)
     # knn(config.k, input_data, config.punct_data)
     # mn(input_data, config.punct_data)
     kmn(config.k, input_data, config.punct_data)
+    fischer(input_data)
