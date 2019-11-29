@@ -32,7 +32,7 @@ def calculate_average(features: np.ndarray) -> np.ndarray:
 
 def randomize_centres(k: int, puncts: list) -> list:
     k_array = []
-    while len(k_array) != 2:
+    while len(k_array) != k:
         val = random.choice(puncts)
         if list(val) not in k_array:
             k_array.append(list(val))
