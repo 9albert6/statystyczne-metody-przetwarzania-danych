@@ -46,8 +46,9 @@ def calculate_new_classes(k: int, puncts: list, centres: list) -> list:
         smallest_distance = calculate_distance(centres[0], feature)
         flag = 0
         for i in range(k):
-            if smallest_distance > calculate_distance(centres[i], feature):
-                smallest_distance = calculate_distance(centres[i], feature)
+            val = calculate_distance(centres[i], feature)
+            if smallest_distance > val:
+                smallest_distance = val
                 flag = i
         test[flag].append(feature)
     return test
