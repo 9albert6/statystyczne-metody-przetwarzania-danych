@@ -1,14 +1,14 @@
 #!/usr/bin/python3
 import numpy as np
-import config
 import random
+import itertools
 
 def read_data(path: str) -> dict:
     with open(path) as file:
         data = file.read().split('\n')
 
-    A = [line[2:].split(',') for line in data if line[0] == 'A']
-    B = [line[2:].split(',') for line in data if line[0] == 'B']
+    A = [line[line.find(',')+1:].split(',') for line in data if line[0] == 'A']
+    B = [line[line.find(',')+1:].split(',') for line in data if line[0] == 'Q']
 
     input_data = {'A': np.array(A, np.dtype("float32")), 
         'B': np.array(B, np.dtype("float32"))}
@@ -71,6 +71,7 @@ def clusterise(k: int, puncts: list, centres: list) -> list:
                 flag = True
                 break
     return k_class, centres
+
 
 def knn(k: int, dane: dict, puncts: list) -> None:
     ost_vote = {'A': 0, 'B': 0}
@@ -165,27 +166,110 @@ def kmn(k: int, dane: dict, puncts: list) -> None:
     print("knm: ", ost_vote)
 
 
-def fischer(dane: dict) -> None:
-    
+def fisher(dane: dict) -> int:
     feature_A_avg = np.average(dane['A'], axis = 0)
     feature_B_avg = np.average(dane['B'], axis = 0)
 
     std_dev_A = np.std(dane['A'], axis = 0)
     std_dev_B = np.std(dane['B'], axis = 0)
 
-    fischer_feature = []
+    fisher_feature = []
 
     for i in range(len(feature_A_avg)):
-        value = (abs(feature_A_avg[i] - feature_B_avg[i]) / (std_dev_A[i] + std_dev_B[i]))
-        fischer_feature.append(value)
-    print(fischer_feature)
+        value = (abs(feature_A_avg[i] - feature_B_avg[i])) / (std_dev_A[i] + std_dev_B[i])
+        fisher_feature.append(value)
 
-    print("The most significant feature is:  ", fischer_feature.index(max(fischer_feature)))
+    return fisher_feature.index(max(fisher_feature))
 
+
+def fisher_for_multiple_features(dane: dict, combinations: int) -> float:
+    features_A = dane['A'][combinations]
+    features_B = dane['B'][combinations]
+
+    features_A_avg = calculate_average(features_A)
+    features_B_avg = calculate_average(features_B)
+
+    a_sample_minus_mean = np.copy(features_A)
+    b_sample_minus_mean = np.copy(features_B)
+    for i in range(0, len(combinations)):
+        a_sample_minus_mean[i] = a_sample_minus_mean[i] - features_A_avg[i]
+        b_sample_minus_mean[i] = b_sample_minus_mean[i] - features_B_avg[i]
+
+    covariance_matrix_A = np.cov(features_A)
+    covariance_matrix_B = np.cov(features_B)
+
+    covariance_matrices_det_sum = np.linalg.det(covariance_matrix_A + covariance_matrix_B)
+    means_vectors_distance = np.linalg.norm(features_A_avg - features_B_avg)
+
+    result = means_vectors_distance / covariance_matrices_det_sum
+    return result
+
+
+def n_fisher(dane: dict, n: int) -> list:
+    number_of_features = len(dane['A'][0])
+    combinations = list(itertools.combinations(range(0, number_of_features), n))
+
+    fisher_result = 0.0
+    feature_combination = None
+
+    for combination in combinations:
+        result = fisher_for_multiple_features(dane, list(combination))
+        if result > fisher_result:
+            fisher_result = result
+            feature_combination = combination
+
+    feature_combination = list(feature_combination)
+    return feature_combination
+
+
+def sts_fisher(dane: dict, n: int) -> list:
+    number_of_features = len(dane['A'][0])
+    best_fisher = [fisher(dane)]
+    
+    fisher_result = 0.0
+
+    for i in range(1, n):
+        for j in range(0, number_of_features):
+            if j in best_fisher:
+                continue
+            next_combination = best_fisher.copy()
+            next_combination.append(j)
+            result = fisher_for_multiple_features(dane, next_combination)
+            if result > fisher_result:
+                fisher_result = result
+                feature_num = j
+        best_fisher.append(feature_num)
+    
+    return best_fisher
+
+
+def exclude_data(dane: dict, features: list) -> dict:
+    A = []
+    B = []
+    for i in features:
+        A.append(dane['A'][i])
+        B.append(dane['B'][i])
+
+    excluded_dane =  {'A': np.array(A, np.dtype("float32")), 
+        'B': np.array(B, np.dtype("float32"))}
+    return excluded_dane
 
 if __name__ == "__main__":
-    input_data = read_data(config.class_data)
+    class_data = "Maple_Oak.txt"
+    input_data = read_data(class_data)
+    
+    fisher_1d = fisher(input_data)
+    print("The most significant feature is:", fisher_1d)
+    # fisher_3d = n_fisher(input_data, 3)
+    # print("3 the most significant features are:", fisher_3d)
+    fisher_4d_sfs = sts_fisher(input_data, 4)
+    print("4 best features according to sts:", fisher_4d_sfs)
+    excluded_data = exclude_data(input_data, fisher_4d_sfs)
+    # k = 2
+    # punct_data = [[1, 7, 3]]
+    # number_of_features = 3
+    
     # knn(config.k, input_data, config.punct_data)
     # mn(input_data, config.punct_data)
-    kmn(config.k, input_data, config.punct_data)
-    fischer(input_data)
+    # kmn(config.k, input_data, config.punct_data)
+    # sts_fisher(input_data, 3)
