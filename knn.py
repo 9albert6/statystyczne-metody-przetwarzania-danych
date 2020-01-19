@@ -2,6 +2,8 @@
 import numpy as np
 import random
 import itertools
+from typing import Tuple
+from sklearn.model_selection import train_test_split
 
 def read_data(path: str) -> dict:
     with open(path) as file:
@@ -14,6 +16,26 @@ def read_data(path: str) -> dict:
         'B': np.array(B, np.dtype("float32"))}
     return input_data
 
+
+def split_data_crossvalidation(dane: dict, num_of_pieces: int) -> Tuple[dict, dict]:
+    for single_class in dane.values():
+        np.random.shuffle(single_class)
+
+    pieces_A = np.array_split(dane['A'], num_of_pieces)
+    pieces_B = np.array_split(dane['B'], num_of_pieces)
+
+    train = {'A': np.concatenate(pieces_A[1:]), 'B': np.concatenate(pieces_B[1:])}
+    test = {'A': pieces_A[0], 'B': pieces_B[0]}
+
+    return train, test
+
+def split_data_bootstrap(dane: dict, test_train_percentage: float) -> Tuple[dict, dict]:
+    
+    pass
+    # train = {'A': train_A, 'B': train_B}
+    # test = {'A': test_A, 'B': test_B}
+
+    # return train, test
 
 def calculate_distance(feature: np.ndarray, punct: np.ndarray) -> float:
     if len(feature) != len(punct):
@@ -73,97 +95,101 @@ def clusterise(k: int, puncts: list, centres: list) -> list:
     return k_class, centres
 
 
-def knn(k: int, dane: dict, puncts: list) -> None:
-    ost_vote = {'A': 0, 'B': 0}
+def knn(k: int, dane: dict, dict_puncts: dict) -> float:
 
-    for punct in puncts:
-        distances_A = []
-        distances_B = []
+    correct = 0
+    for classes, puncts in dict_puncts.items():
+        for punct in puncts:
+            distances_A = []
+            distances_B = []
 
-        for nn_class, features in dane.items():
-            for feature in features:
-                try:
-                    if nn_class == 'A':
-                        distances_A.append(calculate_distance(feature, punct))    
-                    else:
-                        distances_B.append(calculate_distance(feature, punct))
-                except Exception as error:
-                    print(error)
-                    return (2)
+            for nn_class, features in dane.items():
+                for feature in features:
+                    try:
+                        if nn_class == 'A':
+                            distances_A.append(calculate_distance(feature, punct))    
+                        else:
+                            distances_B.append(calculate_distance(feature, punct))
+                    except Exception as error:
+                        print(error)
+                        return (2)
 
-        distances_A.sort()
-        distances_B.sort()
-      
-        all_distances = list(set().union(distances_A, distances_B))
-        all_distances.sort()
+            distances_A.sort()
+            distances_B.sort()
         
-        vote = {'A': 0, 'B': 0}
-        for i in range(k):
-            if all_distances[i] in distances_A:
-                vote['A'] += 1  
-            else:
-                vote['B'] += 1
+            all_distances = list(set().union(distances_A, distances_B))
+            all_distances.sort()
+        
+            vote = {'A': 0, 'B': 0}
+            for i in range(k):
+                if all_distances[i] in distances_A:
+                    vote['A'] += 1
+                elif all_distances[i] in distances_B:
+                    vote['B'] += 1
+            
+            if vote['A'] > vote['B'] and classes == 'A':
+                correct += 1
+            elif vote['A'] < vote['B'] and classes == 'B':
+                correct += 1
+            elif vote['A'] == vote['B'] and classes == 'B':
+                correct += 1
 
-        if vote['A'] > vote['B']:
-            ost_vote['A'] += 1
-        elif vote['A'] < vote['B']:
-            ost_vote['B'] += 1
-        else:
-            ost_vote['A'] += 1
-    print("knn: ", ost_vote)
+    return correct/(len(dict_puncts['A'])+len(dict_puncts['B']))
 
 
-def mn(dane: dict, puncts: list) -> None:
+def mn(dane: dict, dict_puncts: dict) -> float:
     ost_vote = {'A': 0, 'B': 0}
 
     average_A = calculate_average(dane['A'])
     average_B = calculate_average(dane['B'])
 
-    for punct in puncts:
-        distance_a = calculate_distance(average_A, punct)
-        distance_b = calculate_distance(average_B, punct)
+    correct = 0
+    for classes, puncts in dict_puncts.items():
+        for punct in puncts:
+            distance_a = calculate_distance(average_A, punct)
+            distance_b = calculate_distance(average_B, punct)
 
-        if distance_a < distance_b:
-            ost_vote['A'] += 1
-        else:
-            ost_vote['B'] += 1
+            if distance_a < distance_b and classes == 'A':
+                correct += 1
+            elif distance_a > distance_b and classes == 'B':
+                correct += 1
 
-    print("mn: ", ost_vote)
+    return correct/(len(dict_puncts['A'])+len(dict_puncts['B']))
 
 
-def kmn(k: int, dane: dict, puncts: list) -> None:
-    ost_vote = {'A': 0, 'B': 0}
-    
+def kmn(k: int, dane: dict, dict_puncts: dict) -> float:
+    correct = 0    
     k_A = randomize_centres(k, dane['A'])
     k_B = randomize_centres(k, dane['B'])
 
     class_A, k_A = clusterise(k, dane['A'], k_A)
     class_B, k_B = clusterise(k, dane['B'], k_B)
    
-    for punct in puncts:
-        distances_A = []
-        distances_B = []
-        for i in range(k):
-            distances_A.append(calculate_distance(k_A[i], punct))
-            distances_B.append(calculate_distance(k_B[i], punct))
+    for classes, puncts in dict_puncts.items():
+        for punct in puncts:
+            distances_A = []
+            distances_B = []
+            for i in range(k):
+                distances_A.append(calculate_distance(k_A[i], punct))
+                distances_B.append(calculate_distance(k_B[i], punct))
 
-        all_distances = list(set().union(distances_A, distances_B))
-        all_distances.sort()
+            all_distances = list(set().union(distances_A, distances_B))
+            all_distances.sort()
 
-        vote = {'A': 0, 'B': 0}
-        for i in range(k):
-            if all_distances[i] in distances_A:
-                vote['A'] += 1  
-            else:
-                vote['B'] += 1
+            vote = {'A': 0, 'B': 0}
+            for i in range(k):
+                if all_distances[i] in distances_A:
+                    vote['A'] += 1  
+                else:
+                    vote['B'] += 1
 
-        if vote['A'] > vote['B']:
-            ost_vote['A'] += 1
-        elif vote['A'] < vote['B']:
-            ost_vote['B'] += 1
-        else:
-            ost_vote['A'] += 1
-    print("knm: ", ost_vote)
+            if vote['A'] > vote['B'] and classes == 'A':
+                correct += 1
+            elif vote['A'] < vote['B'] and classes == 'B':
+                correct += 1
+            elif vote['A'] == vote['B'] and classes == 'B':
+                correct += 1
+    return correct/(len(dict_puncts['A'])+len(dict_puncts['B']))
 
 
 def fisher(dane: dict) -> int:
@@ -222,7 +248,7 @@ def n_fisher(dane: dict, n: int) -> list:
     return feature_combination
 
 
-def sts_fisher(dane: dict, n: int) -> list:
+def sfs_fisher(dane: dict, n: int) -> list:
     number_of_features = len(dane['A'][0])
     best_fisher = [fisher(dane)]
     
@@ -243,12 +269,13 @@ def sts_fisher(dane: dict, n: int) -> list:
     return best_fisher
 
 
-def exclude_data(dane: dict, features: list) -> dict:
+def exclude_data(dane: dict, exclude_features: list) -> dict:
     A = []
     B = []
-    for i in features:
-        A.append(dane['A'][i])
-        B.append(dane['B'][i])
+
+    for i in range(len(dane['A'])):
+        A.append(dane['A'][i][exclude_features])
+        B.append(dane['B'][i][exclude_features])
 
     excluded_dane =  {'A': np.array(A, np.dtype("float32")), 
         'B': np.array(B, np.dtype("float32"))}
@@ -256,20 +283,42 @@ def exclude_data(dane: dict, features: list) -> dict:
 
 if __name__ == "__main__":
     class_data = "Maple_Oak.txt"
+    ####VARIABLES
+    ###SPLIT
+    split = "crossvalidation" #crossvalidation/bootstup
+    number_of_pieces = 5
+    number_of_repetition = 5
+    test_train_ration = 0.2
+    ###FISHER
+    fisher_func = "sfs" #sfs/n_fisher
+    number_of_features = 5
+    ###ALGORITHM
+    algorithm = "kmn" #knn/mn/kmn
+    k = 7
+
+
     input_data = read_data(class_data)
+    result = []
+    for i in range(number_of_repetition):
+        if split is "crossvalidation":
+            train, test = split_data_crossvalidation(input_data, number_of_pieces)
+        else:
+            train, test = split_data_bootstrap(input_data, test_train_ration)
+        if fisher_func is "sfs":
+            main_features = sfs_fisher(train, number_of_features)
+        else:
+            main_features = n_fisher(train, number_of_features)
+
+        train = exclude_data(train, main_features)
+        test = exclude_data(test, main_features)
+
+        accuracy = 0
+        if algorithm is "knn":
+            accuracy = knn(k, train, test)
+        elif algorithm is "mn":
+            accuracy = mn(train, test)
+        else:
+            accuracy = kmn(k, train, test)
+        result.append(accuracy)
     
-    fisher_1d = fisher(input_data)
-    print("The most significant feature is:", fisher_1d)
-    # fisher_3d = n_fisher(input_data, 3)
-    # print("3 the most significant features are:", fisher_3d)
-    fisher_4d_sfs = sts_fisher(input_data, 4)
-    print("4 best features according to sts:", fisher_4d_sfs)
-    excluded_data = exclude_data(input_data, fisher_4d_sfs)
-    # k = 2
-    # punct_data = [[1, 7, 3]]
-    # number_of_features = 3
-    
-    # knn(config.k, input_data, config.punct_data)
-    # mn(input_data, config.punct_data)
-    # kmn(config.k, input_data, config.punct_data)
-    # sts_fisher(input_data, 3)
+    print(sum(result)/number_of_repetition)
