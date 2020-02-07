@@ -4,16 +4,19 @@ import random
 import itertools
 from typing import Tuple
 from sklearn.model_selection import train_test_split
+import sys
 
 def read_data(path: str) -> dict:
     with open(path) as file:
-        data = file.read().split('\n')
+        data = file.read().replace(' ', '').split('\n')
 
+    # dla testowych danych
     A = [line[line.find(',')+1:].split(',') for line in data if line[0] == 'A']
     B = [line[line.find(',')+1:].split(',') for line in data if line[0] == 'Q']
 
     input_data = {'A': np.array(A, np.dtype("float32")), 
         'B': np.array(B, np.dtype("float32"))}
+    print(input_data['B'].shape)
     return input_data
 
 
@@ -31,21 +34,23 @@ def split_data_crossvalidation(dane: dict, num_of_pieces: int) -> Tuple[dict, di
 
 def split_data_bootstrap(dane: dict, test_train_percentage: float) -> Tuple[dict, dict]:
     
-    pass
-    # train = {'A': train_A, 'B': train_B}
-    # test = {'A': test_A, 'B': test_B}
+    X_train, X_test, y_train, y_test = train_test_split(dane['A'], dane['B'],
+                                                        test_size=test_train_percentage, random_state=42)
 
-    # return train, test
+    train = {'A': X_train, 'B': y_train}
+    test = {'A': X_test, 'B': y_test}
+    return train, test
 
 def calculate_distance(feature: np.ndarray, punct: np.ndarray) -> float:
     if len(feature) != len(punct):
         raise Exception('''The number of features of point is diffrent   
                 than the number of features of class.''')
 
-    distance = 0.0
-    for i in range(len(feature)):
-        distance += (feature[i] - punct[i])**2 
-    return np.sqrt(distance)
+    # distance = 0.0
+    # for i in range(len(feature)):
+    #     distance += (feature[i] - punct[i])**2 
+    # return np.sqrt(distance)
+    return np.linalg.norm(feature - punct)
 
 
 def calculate_average(features: np.ndarray) -> np.ndarray:
@@ -97,30 +102,26 @@ def clusterise(k: int, puncts: list, centres: list) -> list:
 
 def knn(k: int, dane: dict, dict_puncts: dict) -> float:
 
+    features_A = dane["A"]
+    features_B = dane["B"]
     correct = 0
     for classes, puncts in dict_puncts.items():
         for punct in puncts:
+            vote = {'A': 0, 'B': 0}
             distances_A = []
             distances_B = []
 
-            for nn_class, features in dane.items():
-                for feature in features:
-                    try:
-                        if nn_class == 'A':
-                            distances_A.append(calculate_distance(feature, punct))    
-                        else:
-                            distances_B.append(calculate_distance(feature, punct))
-                    except Exception as error:
-                        print(error)
-                        return (2)
-
+            for feature in features_A:
+                distances_A.append(calculate_distance(feature, punct))    
+            for feature in features_B:
+                distances_B.append(calculate_distance(feature, punct))
+               
             distances_A.sort()
             distances_B.sort()
         
             all_distances = list(set().union(distances_A, distances_B))
             all_distances.sort()
         
-            vote = {'A': 0, 'B': 0}
             for i in range(k):
                 if all_distances[i] in distances_A:
                     vote['A'] += 1
@@ -204,29 +205,39 @@ def fisher(dane: dict) -> int:
     for i in range(len(feature_A_avg)):
         value = (abs(feature_A_avg[i] - feature_B_avg[i])) / (std_dev_A[i] + std_dev_B[i])
         fisher_feature.append(value)
-
     return fisher_feature.index(max(fisher_feature))
 
 
 def fisher_for_multiple_features(dane: dict, combinations: int) -> float:
-    features_A = dane['A'][combinations]
-    features_B = dane['B'][combinations]
+    features_A = []
+    features_B = []
 
-    features_A_avg = calculate_average(features_A)
-    features_B_avg = calculate_average(features_B)
-
-    a_sample_minus_mean = np.copy(features_A)
-    b_sample_minus_mean = np.copy(features_B)
-    for i in range(0, len(combinations)):
-        a_sample_minus_mean[i] = a_sample_minus_mean[i] - features_A_avg[i]
-        b_sample_minus_mean[i] = b_sample_minus_mean[i] - features_B_avg[i]
-
-    covariance_matrix_A = np.cov(features_A)
-    covariance_matrix_B = np.cov(features_B)
-
-    covariance_matrices_det_sum = np.linalg.det(covariance_matrix_A + covariance_matrix_B)
+    for i in range(len(dane['A'])):
+        features_A.append(dane['A'][i][combinations])
+    for i in range(len(dane['B'])):
+        features_B.append(dane['B'][i][combinations])
+    # features_A = [[1,-1],[1,0],[2,-1],[1,-1]]
+    # features_B = [[1,1], [1,1], [2,2], [2,1]]
+    # combinations = [20, 0]
+    features_A_avg = np.average(features_A, axis=0)
+    features_B_avg = np.average(features_B, axis=0)
     means_vectors_distance = np.linalg.norm(features_A_avg - features_B_avg)
 
+    ones_A = np.ones((len(features_A), len(combinations)))
+    ones_B = np.ones((len(features_B), len(combinations)))
+    
+    features_A_avg_ext = ones_A * features_A_avg
+    features_B_avg_ext = ones_B * features_B_avg
+
+    A_minus_mean = (features_A - features_A_avg_ext)
+    B_minus_mean = (features_B - features_B_avg_ext)
+
+    covariance_matrix_A = np.dot(A_minus_mean.T, A_minus_mean) / len(features_A)
+    covariance_matrix_B = np.dot(B_minus_mean.T, B_minus_mean) / len(features_B)
+
+    covariance_matrices_det_sum = np.linalg.det(covariance_matrix_A + covariance_matrix_B) 
+    if covariance_matrices_det_sum == 0.0:
+        return sys.float_info.min
     result = means_vectors_distance / covariance_matrices_det_sum
     return result
 
@@ -234,12 +245,13 @@ def fisher_for_multiple_features(dane: dict, combinations: int) -> float:
 def n_fisher(dane: dict, n: int) -> list:
     number_of_features = len(dane['A'][0])
     combinations = list(itertools.combinations(range(0, number_of_features), n))
-
+    
     fisher_result = 0.0
     feature_combination = None
 
     for combination in combinations:
         result = fisher_for_multiple_features(dane, list(combination))
+        print("Combination:", combination, "result:", result)
         if result > fisher_result:
             fisher_result = result
             feature_combination = combination
@@ -252,15 +264,15 @@ def sfs_fisher(dane: dict, n: int) -> list:
     number_of_features = len(dane['A'][0])
     best_fisher = [fisher(dane)]
     
-    fisher_result = 0.0
-
     for i in range(1, n):
+        fisher_result = 0.0
         for j in range(0, number_of_features):
             if j in best_fisher:
                 continue
             next_combination = best_fisher.copy()
             next_combination.append(j)
             result = fisher_for_multiple_features(dane, next_combination)
+            # print("Combination:", next_combination, "result:", result)
             if result > fisher_result:
                 fisher_result = result
                 feature_num = j
@@ -275,6 +287,7 @@ def exclude_data(dane: dict, exclude_features: list) -> dict:
 
     for i in range(len(dane['A'])):
         A.append(dane['A'][i][exclude_features])
+    for i in range(len(dane['B'])):
         B.append(dane['B'][i][exclude_features])
 
     excluded_dane =  {'A': np.array(A, np.dtype("float32")), 
@@ -282,35 +295,34 @@ def exclude_data(dane: dict, exclude_features: list) -> dict:
     return excluded_dane
 
 if __name__ == "__main__":
-    class_data = "Maple_Oak.txt"
+    class_data = "rece.txt"
     ####VARIABLES
     ###SPLIT
     split = "crossvalidation" #crossvalidation/bootstup
-    number_of_pieces = 5
-    number_of_repetition = 5
-    test_train_ration = 0.2
+    number_of_pieces = 4
+    number_of_repetition = 4
+    test_train_ratio = 0.2
     ###FISHER
     fisher_func = "sfs" #sfs/n_fisher
-    number_of_features = 5
+    number_of_features = 10
     ###ALGORITHM
     algorithm = "kmn" #knn/mn/kmn
     k = 7
 
-
     input_data = read_data(class_data)
     result = []
+    if fisher_func is "sfs":
+        main_features = sfs_fisher(input_data, number_of_features)
+    else:
+        main_features = n_fisher(input_data, number_of_features)
+    print("Cechy", main_features)
+    # main_features = [30, 15, 7, 33, 60, 55, 39, 21, 45, 22]
+    data = exclude_data(input_data, main_features)
     for i in range(number_of_repetition):
         if split is "crossvalidation":
-            train, test = split_data_crossvalidation(input_data, number_of_pieces)
+            train, test = split_data_crossvalidation(data, number_of_pieces)
         else:
-            train, test = split_data_bootstrap(input_data, test_train_ration)
-        if fisher_func is "sfs":
-            main_features = sfs_fisher(train, number_of_features)
-        else:
-            main_features = n_fisher(train, number_of_features)
-
-        train = exclude_data(train, main_features)
-        test = exclude_data(test, main_features)
+            train, test = split_data_bootstrap(data, test_train_ratio)
 
         accuracy = 0
         if algorithm is "knn":
